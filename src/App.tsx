@@ -1,63 +1,188 @@
 import React, { useState } from 'react';
 import { Building2, Clock, FileText, Image, Search, Upload, User } from 'lucide-react';
 
-function App() {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    businessName: '',
-    companyRegistration: '',
-    areaCode: '',
-    phoneNumber: '',
-    email: '',
-    address: {
-      street1: '',
-      street2: '',
-      city: '',
-      state: '',
-      zip: '',
-      country: ''
-    },
-    businessType: '',
-    otherBusinessType: '',
-    description: '',
-    hours: {
-      weekdayOpen: '08:00',
-      weekdayClosed: '17:00',
-      saturdayOpen: '08:00',
-      saturdayClosed: '15:00',
-      sundayOpen: '',
-      sundayClosed: ''
-    },
-    keywords: Array(8).fill('')
-  });
+interface FormData {
+  firstName: string;
+  lastName: string;
+  businessName: string;
+  companyRegistration: string;
+  areaCode: string;
+  phoneNumber: string;
+  email: string;
+  address: {
+    street1: string;
+    street2: string;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+  };
+  businessType: string;
+  otherBusinessType: string;
+  description: string;
+  hours: {
+    weekdayOpen: string;
+    weekdayClosed: string;
+    saturdayOpen: string;
+    saturdayClosed: string;
+    sundayOpen: string;
+    sundayClosed: string;
+  };
+  keywords: string[];
+  files: {
+    images: File[];
+    profile: File | null;
+  };
+}
 
+const initialFormData: FormData = {
+  firstName: '',
+  lastName: '',
+  businessName: '',
+  companyRegistration: '',
+  areaCode: '',
+  phoneNumber: '',
+  email: '',
+  address: {
+    street1: '',
+    street2: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: ''
+  },
+  businessType: '',
+  otherBusinessType: '',
+  description: '',
+  hours: {
+    weekdayOpen: '08:00',
+    weekdayClosed: '17:00',
+    saturdayOpen: '08:00',
+    saturdayClosed: '15:00',
+    sundayOpen: '',
+    sundayClosed: ''
+  },
+  keywords: Array(8).fill(''),
+  files: {
+    images: [],
+    profile: null
+  }
+};
+function App() {
+  const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target as HTMLInputElement;
+    
+    if (type === 'file') {
+      const files = (e.target as HTMLInputElement).files;
+      if (files) {
+        if (name === 'images') {
+          setFormData(prev => ({
+            ...prev,
+            files: {
+              ...prev.files,
+              images: Array.from(files)
+            }
+          }));
+        } else if (name === 'profile') {
+          setFormData(prev => ({
+            ...prev,
+            files: {
+              ...prev.files,
+              profile: files[0]
+            }
+          }));
+        }
+      }
+      return;
+    }
+
+    if (name.startsWith('keywords[')) {
+      const index = parseInt(name.match(/\[(\d+)\]/)?.[1] || '0');
+      setFormData(prev => ({
+        ...prev,
+        keywords: prev.keywords.map((k, i) => i === index ? value : k)
+      }));
+      return;
+    }
+
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof typeof prev],
+          [child]: value
+        }
+      }));
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus('idle');
 
-    const formattedData = {
-      timestamp: new Date().toISOString(),
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      businessName: formData.businessName,
-      companyRegistration: formData.companyRegistration,
-      phone: `${formData.areaCode}-${formData.phoneNumber}`,
-      email: formData.email,
-      fullAddress: `${formData.address.street1}, ${formData.address.street2 ? formData.address.street2 + ', ' : ''}${formData.address.city}, ${formData.address.state} ${formData.address.zip}, ${formData.address.country}`,
-      businessType: formData.businessType === 'other' ? formData.otherBusinessType : formData.businessType,
-      weekdayHours: `${formData.hours.weekdayOpen} - ${formData.hours.weekdayClosed}`,
-      saturdayHours: `${formData.hours.saturdayOpen} - ${formData.hours.saturdayClosed}`,
-      sundayHours: formData.hours.sundayOpen && formData.hours.sundayClosed ? `${formData.hours.sundayOpen} - ${formData.hours.sundayClosed}` : 'Closed',
-      keywords: formData.keywords.filter(k => k).join(', ')
-    };
-
     try {
-      const response = await fetch('https://script.google.com/macros/s/AKfycbz7IXgy8tcJ5vb1g0yXAQB9DkQMhbDLXkDPZSs12ZugM_6OF3rF6h8bYSrLrymDKbQU/exec', {
+      const filePromises = [];
+      
+      for (const image of formData.files.images) {
+        filePromises.push(new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve({
+              name: image.name,
+              type: image.type,
+              data: (reader.result as string).split(',')[1]
+            });
+          };
+          reader.readAsDataURL(image);
+        }));
+      }
+
+      if (formData.files.profile) {
+        filePromises.push(new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve({
+              name: formData.files.profile?.name,
+              type: formData.files.profile?.type,
+              data: (reader.result as string).split(',')[1]
+            });
+          };
+          reader.readAsDataURL(formData.files.profile);
+        }));
+      }
+
+      const processedFiles = await Promise.all(filePromises);
+
+      const formattedData = {
+        timestamp: new Date().toISOString(),
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        businessName: formData.businessName,
+        companyRegistration: formData.companyRegistration,
+        phone: `${formData.areaCode}-${formData.phoneNumber}`,
+        email: formData.email,
+        fullAddress: `${formData.address.street1}, ${formData.address.street2 ? formData.address.street2 + ', ' : ''}${formData.address.city}, ${formData.address.state} ${formData.address.zip}, ${formData.address.country}`,
+        businessType: formData.businessType === 'other' ? formData.otherBusinessType : formData.businessType,
+        weekdayHours: `${formData.hours.weekdayOpen} - ${formData.hours.weekdayClosed}`,
+        saturdayHours: `${formData.hours.saturdayOpen} - ${formData.hours.saturdayClosed}`,
+        sundayHours: formData.hours.sundayOpen && formData.hours.sundayClosed ? `${formData.hours.sundayOpen} - ${formData.hours.sundayClosed}` : 'Closed',
+        keywords: formData.keywords.filter(k => k).join(', '),
+        files: processedFiles
+      };
+
+      const response = await fetch('YOUR_GOOGLE_APPS_SCRIPT_URL', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,35 +193,7 @@ function App() {
       if (!response.ok) throw new Error('Submission failed');
       
       setSubmitStatus('success');
-      setFormData({
-        firstName: '',
-        lastName: '',
-        businessName: '',
-        companyRegistration: '',
-        areaCode: '',
-        phoneNumber: '',
-        email: '',
-        address: {
-          street1: '',
-          street2: '',
-          city: '',
-          state: '',
-          zip: '',
-          country: ''
-        },
-        businessType: '',
-        otherBusinessType: '',
-        description: '',
-        hours: {
-          weekdayOpen: '08:00',
-          weekdayClosed: '17:00',
-          saturdayOpen: '08:00',
-          saturdayClosed: '15:00',
-          sundayOpen: '',
-          sundayClosed: ''
-        },
-        keywords: Array(8).fill('')
-      });
+      setFormData(initialFormData);
     } catch (error) {
       console.error('Submission error:', error);
       setSubmitStatus('error');
@@ -104,40 +201,6 @@ function App() {
       setIsSubmitting(false);
     }
   };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    
-    setFormData(prev => {
-      // Handle keywords array updates
-      if (name.startsWith('keywords[')) {
-        const index = parseInt(name.match(/\[(\d+)\]/)?.[1] || '0');
-        return {
-          ...prev,
-          keywords: prev.keywords.map((k, i) => i === index ? value : k)
-        };
-      }
-      
-      // Handle nested object updates
-      if (name.includes('.')) {
-        const [parent, child] = name.split('.');
-        return {
-          ...prev,
-          [parent]: {
-            ...prev[parent as keyof typeof prev],
-            [child]: value
-          }
-        };
-      }
-      
-      // Handle regular field updates
-      return {
-        ...prev,
-        [name]: value
-      };
-    });
-  };
-
   const inputClasses = "mt-1 block w-full rounded-md border-[#f5f5f5] border-[3px] shadow-[0_4px_6px_rgba(0,0,0,0.1)] focus:border-blue-500 focus:ring-blue-500 bg-white px-3 py-2";
   const selectClasses = "mt-1 block w-full rounded-md border-[#f5f5f5] border-[3px] shadow-[0_4px_6px_rgba(0,0,0,0.1)] focus:border-blue-500 focus:ring-blue-500 bg-white";
   const fileInputClasses = "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-[#f5f5f5] border-[3px] rounded-md shadow-[0_4px_6px_rgba(0,0,0,0.1)]";
@@ -258,6 +321,7 @@ function App() {
             </div>
           </section>
 
+          {/* Continue with remaining sections... */}
           {/* Address Section */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-gray-900">Address*</h2>
@@ -319,7 +383,8 @@ function App() {
                 <option value="US">United States</option>
                 <option value="CA">Canada</option>
                 <option value="UK">United Kingdom</option>
-                {/* Add more countries as needed */}
+                <option value="AU">Australia</option>
+                <option value="NZ">New Zealand</option>
               </select>
             </div>
           </section>
@@ -341,17 +406,19 @@ function App() {
                 <option value="restaurant">Restaurant</option>
                 <option value="other">Other</option>
               </select>
-              <input
-                type="text"
-                name="otherBusinessType"
-                value={formData.otherBusinessType}
-                onChange={handleChange}
-                placeholder="Others, please specify"
-                className={inputClasses}
-              />
+              {formData.businessType === 'other' && (
+                <input
+                  type="text"
+                  name="otherBusinessType"
+                  value={formData.otherBusinessType}
+                  onChange={handleChange}
+                  placeholder="Please specify your business type"
+                  required
+                  className={inputClasses}
+                />
+              )}
             </div>
           </section>
-
           {/* Business Hours Section */}
           <section className="space-y-4">
             <div className="flex items-center gap-2 text-xl font-semibold text-gray-900 mb-4">
@@ -463,8 +530,10 @@ function App() {
               </div>
               <input
                 type="file"
+                name="images"
                 accept="image/*"
                 multiple
+                onChange={handleChange}
                 className={fileInputClasses}
               />
               
@@ -474,12 +543,15 @@ function App() {
               </div>
               <input
                 type="file"
+                name="profile"
                 accept=".pdf"
+                onChange={handleChange}
                 className={fileInputClasses}
               />
             </div>
           </section>
 
+          {/* Submit Button */}
           <div className="pt-4">
             <button
               type="submit"
