@@ -57,7 +57,7 @@ function App() {
     };
 
     try {
-      const response = await fetch('YOUR_GOOGLE_APPS_SCRIPT_URL', {
+      const response = await fetch('https://script.google.com/macros/s/AKfycbz7IXgy8tcJ5vb1g0yXAQB9DkQMhbDLXkDPZSs12ZugM_6OF3rF6h8bYSrLrymDKbQU/exec', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,21 +107,35 @@ function App() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent as keyof typeof prev],
-          [child]: value
-        }
-      }));
-    } else {
-      setFormData(prev => ({
+    
+    setFormData(prev => {
+      // Handle keywords array updates
+      if (name.startsWith('keywords[')) {
+        const index = parseInt(name.match(/\[(\d+)\]/)?.[1] || '0');
+        return {
+          ...prev,
+          keywords: prev.keywords.map((k, i) => i === index ? value : k)
+        };
+      }
+      
+      // Handle nested object updates
+      if (name.includes('.')) {
+        const [parent, child] = name.split('.');
+        return {
+          ...prev,
+          [parent]: {
+            ...prev[parent as keyof typeof prev],
+            [child]: value
+          }
+        };
+      }
+      
+      // Handle regular field updates
+      return {
         ...prev,
         [name]: value
-      }));
-    }
+      };
+    });
   };
 
   const inputClasses = "mt-1 block w-full rounded-md border-[#f5f5f5] border-[3px] shadow-[0_4px_6px_rgba(0,0,0,0.1)] focus:border-blue-500 focus:ring-blue-500 bg-white px-3 py-2";
